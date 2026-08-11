@@ -1,0 +1,116 @@
+{
+  "name": "semlix",
+  "productName": "Semlix",
+  "version": "1.0.0",
+  "description": "Semlix desktop application for local email search",
+  "author": "Semlix",
+  "license": "MIT",
+  "homepage": "https://github.com/makercyf/Semlix",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/makercyf/Semlix.git"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "main": "dist/main.js",
+  "scripts": {
+    "clean": "rimraf dist",
+    "clean:release": "rimraf release",
+    "build:main": "tsc -p tsconfig.json",
+    "build:renderer": "esbuild src/renderer/renderer.ts --bundle --platform=browser --format=esm --outdir=dist/renderer && copyfiles -u 2 src/renderer/**/*.{html,css,ttf,txt} dist/renderer",
+    "build": "npm run clean && npm run build:main && npm run build:renderer",
+    "test": "npm run build && npm run test:unit && npm run test:integration",
+    "test:unit": "node --test tests/unit/*.test.cjs",
+    "test:integration": "node scripts/run-electron-tests.cjs",
+    "rebuild:native": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "start": "npm run build && electron .",
+    "verify:release-inputs": "node scripts/verify-release-inputs.cjs",
+    "package": "npm run package:windows",
+    "package:windows": "npm run verify:release-inputs && npm run clean:release && npm run build && electron-builder --win nsis portable --x64 --publish never",
+    "package:installer": "npm run verify:release-inputs && npm run clean:release && npm run build && electron-builder --win nsis --x64 --publish never",
+    "package:dir": "npm run verify:release-inputs && npm run clean:release && npm run build && electron-builder --win dir --x64 --publish never",
+    "package:portable": "npm run verify:release-inputs && npm run clean:release && npm run build && electron-builder --win portable --x64 --publish never",
+    "verify:packaged": "node scripts/run-packaged-verification.cjs release/win-unpacked",
+    "package:mac": "npm run verify:release-inputs && npm run clean:release && npm run build && electron-builder --mac dmg --publish never",
+    "package:mac:dir": "npm run verify:release-inputs && npm run clean:release && npm run build && electron-builder --mac dir --publish never",
+    "package:linux": "npm run verify:release-inputs && npm run clean:release && npm run build && electron-builder --linux AppImage --publish never",
+    "package:linux:dir": "npm run verify:release-inputs && npm run clean:release && npm run build && electron-builder --linux dir --publish never"
+  },
+  "devDependencies": {
+    "@electron/asar": "^3.4.1",
+    "@electron/rebuild": "4.2.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/mailparser": "^3.4.6",
+    "@types/node": "^20.0.0",
+    "copyfiles": "^2.4.1",
+    "electron": "^26.0.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "^0.25.4",
+    "node-gyp": "12.4.0",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.2.0",
+    "@types/moment-timezone": "^0.5.13",
+    "better-sqlite3": "^11.10.0",
+    "cheerio": "^1.0.0-rc.12",
+    "date-fns": "4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "glob": "^10.3.0",
+    "mailparser": "^3.7.3",
+    "moment-timezone": "^0.5.43",
+    "sqlite-vec": "^0.1.7-alpha.2"
+  },
+  "build": {
+    "appId": "com.local.semlix",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/**/*.node",
+      "node_modules/@huggingface/transformers/**/*",
+      "node_modules/sqlite-vec-*/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "!node_modules/@huggingface/transformers/.cache{,/**/*}"
+    ],
+    "extraResources": [
+      {
+        "from": "imgs/icons/semlix-icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "imgs/icons/png/icon-512x512.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "icon": "imgs/icons/semlix-icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "artifactName": "${productName}-${version}-windows-${arch}-setup.${ext}",
+      "uninstallDisplayName": "${productName}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-windows-${arch}-portable.${ext}"
+    },
+    "mac": {
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
+      "icon": "imgs/icons/semlix-icon.svg"
+    },
+    "linux": {
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
+      "icon": "imgs/icons/semlix-icon.svg"
+    }
+  }
+}

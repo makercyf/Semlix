@@ -1,0 +1,89 @@
+name: Build Windows
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Source branch, tag, or commit to build
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Source branch, tag, or commit to build
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build unpacked application
+        run: npm run package:dir
+
+      - name: Verify packaged runtime
+        run: npm run verify:packaged
+
+      - name: Build installer and portable executable
+        run: npm run package
+
+      - name: Stage packages and calculate SHA-256 hashes
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ReleaseDirectory = Join-Path $env:GITHUB_WORKSPACE "release"
+          $ArtifactDirectory = Join-Path $env:GITHUB_WORKSPACE "dist\artifacts"
+
+          $SetupFiles = @(Get-ChildItem -LiteralPath $ReleaseDirectory -File -Filter "Semlix-*-windows-x64-setup.exe")
+          $PortableFiles = @(Get-ChildItem -LiteralPath $ReleaseDirectory -File -Filter "Semlix-*-windows-x64-portable.exe")
+
+          if ($SetupFiles.Count -ne 1) {
+            throw "Expected exactly one Windows installer, found $($SetupFiles.Count)."
+          }
+          if ($PortableFiles.Count -ne 1) {
+            throw "Expected exactly one portable executable, found $($PortableFiles.Count)."
+          }
+
+          New-Item -ItemType Directory -Force -Path $ArtifactDirectory | Out-Null
+
+          $Artifacts = @($SetupFiles[0], $PortableFiles[0])
+          foreach ($Artifact in $Artifacts) {
+            Copy-Item -LiteralPath $Artifact.FullName -Destination $ArtifactDirectory
+          }
+
+          $HashLines = $Artifacts | ForEach-Object {
+            $Hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$Hash  $($_.Name)"
+          }
+          $ChecksumPath = Join-Path $ArtifactDirectory "SHA256SUMS.txt"
+          $HashLines | Set-Content -LiteralPath $ChecksumPath -Encoding ascii
+          $HashLines | Write-Host
+
+      - name: Upload Windows packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: Semlix-windows-x64
+          path: dist/artifacts/*
+          if-no-files-found: error
+          retention-days: 7

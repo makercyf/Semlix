@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    name: Prepare release
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      commit: ${{ steps.release.outputs.commit }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Determine release version and commit
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    name: Build Windows
+    needs: prepare-release
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      ref: ${{ needs.prepare-release.outputs.commit }}
+
+  build-macos:
+    name: Build macOS
+    needs: prepare-release
+    uses: ./.github/workflows/build-macos.yml
+    with:
+      ref: ${{ needs.prepare-release.outputs.commit }}
+
+  build-linux:
+    name: Build Linux
+    needs: prepare-release
+    uses: ./.github/workflows/build-linux.yml
+    with:
+      ref: ${{ needs.prepare-release.outputs.commit }}
+
+  assemble-release:
+    name: Assemble release bundle
+    needs:
+      - prepare-release
+      - build-windows
+      - build-macos
+      - build-linux
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download platform artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: Semlix-*
+          path: downloaded-artifacts
+
+      - name: Assemble release and calculate SHA-256 hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          download_directory="$GITHUB_WORKSPACE/downloaded-artifacts"
+          release_directory="$GITHUB_WORKSPACE/release-assets"
+
+          mkdir -p "$release_directory"
+
+          mapfile -d '' package_files < <(
+            find "$download_directory" -type f \
+              \( -name 'Semlix-*.exe' -o -name 'Semlix-*.dmg' -o -name 'Semlix-*.AppImage' \) \
+              -print0
+          )
+
+          if [[ ${#package_files[@]} -ne 6 ]]; then
+            echo "Expected six release packages, found ${#package_files[@]}." >&2
+            exit 1
+          fi
+
+          for package_file in "${package_files[@]}"; do
+            package_name="$(basename "$package_file")"
+            destination="$release_directory/$package_name"
+
+            if [[ -e "$destination" ]]; then
+              echo "Duplicate release package name: $package_name" >&2
+              exit 1
+            fi
+
+            cp "$package_file" "$destination"
+          done
+
+          cd "$release_directory"
+          shopt -s nullglob
+          release_files=(Semlix-*.exe Semlix-*.dmg Semlix-*.AppImage)
+          printf '%s\0' "${release_files[@]}" \
+            | sort -z \
+            | xargs -0 sha256sum > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload complete release bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: Semlix-${{ needs.prepare-release.outputs.version }}-release
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 30

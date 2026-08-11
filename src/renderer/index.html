@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Semlix</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self';">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="input-controls">
+
+            <!-- Keyword + Mode -->
+            <div class="tb-group tb-group--keyword">
+                <span class="tb-label">Keyword</span>
+                <div class="tb-row">
+                    <input type="text" id="keyword-input" placeholder="Search terms&hellip;">
+                    <select id="mode-dropdown">
+                        <option value="keyword">Keyword search</option>
+                        <option value="semantic">Semantic search</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Sender -->
+            <div class="tb-group tb-group--sender">
+                <span class="tb-label">Sender</span>
+                <input type="text" id="sender-input" placeholder="Name or email&hellip;">
+            </div>
+
+            <!-- Date range -->
+            <div class="tb-group">
+                <span class="tb-label">Date range</span>
+                <div class="tb-row">
+                    <input type="number" id="from-year-input" class="date-part year" placeholder="YYYY" min="1900" max="9999">
+                    <input type="number" id="from-month-input" class="date-part mday" placeholder="MM" min="1" max="12">
+                    <input type="number" id="from-day-input" class="date-part mday" placeholder="DD" min="1" max="31">
+                    <span class="date-arrow">&rarr;</span>
+                    <input type="number" id="to-year-input" class="date-part year" placeholder="YYYY" min="1900" max="9999">
+                    <input type="number" id="to-month-input" class="date-part mday" placeholder="MM" min="1" max="12">
+                    <input type="number" id="to-day-input" class="date-part mday" placeholder="DD" min="1" max="31">
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="tb-group">
+                <span class="tb-label" aria-hidden="true" style="opacity:0;">_</span>
+                <div class="tb-row">
+                    <button id="search-button" type="button">
+                        <span class="search-button-spinner" aria-hidden="true"></span>
+                        <span id="search-button-label">Search</span>
+                    </button>
+                    <button id="settings-button" class="settings-button" type="button" aria-label="Open settings">
+                        <svg viewBox="0 0 20 20" aria-hidden="true">
+                            <path d="M10 6.75A3.25 3.25 0 1 0 10 13.25 3.25 3.25 0 0 0 10 6.75Z"/>
+                            <path d="M16.05 11.2c.08-.39.08-2.01 0-2.4l1.35-1.05-1.55-2.68-1.59.65a6.78 6.78 0 0 0-2.08-1.2L11.94 2.8h-3.1L8.6 4.52a6.78 6.78 0 0 0-2.08 1.2l-1.59-.65-1.55 2.68L4.73 8.8a6.06 6.06 0 0 0 0 2.4l-1.35 1.05 1.55 2.68 1.59-.65c.62.52 1.32.92 2.08 1.2l.24 1.72h3.1l.24-1.72a6.78 6.78 0 0 0 2.08-1.2l1.59.65 1.55-2.68-1.35-1.05Z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="loading-indicator" class="search-progress" role="status" aria-live="polite" aria-atomic="true" hidden>
+            <span class="search-progress-spinner" aria-hidden="true"></span>
+            <span class="search-progress-copy">
+                <strong id="search-progress-title">Searching emails</strong>
+                <span id="search-progress-detail">Checking the local index.</span>
+            </span>
+        </div>
+
+        <div class="results-table-container">
+            <table id="mail-table">
+                <thead>
+                    <tr>
+                        <th data-sort-key="name" style="width: 175px;">Sender</th>
+                        <th data-sort-key="address" style="width: 175px;">Email Address</th>
+                        <th data-sort-key="subject" style="width: 325px;">Subject</th>
+                        <th data-sort-key="date" style="width: 150px;">Date</th>
+                        <th data-sort-key="attachment" style="width: 75px;">Attachment</th>
+                    </tr>
+                </thead>
+                <tbody id="mail-table-body">
+                    <!-- Results will be populated here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="index-progress-modal" class="modal-overlay" hidden>
+        <div class="modal-dialog">
+            <h2>Indexing emails</h2>
+            <progress id="index-progress-bar" max="1" value="0"></progress>
+            <div id="index-progress-text">Preparing...</div>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal-overlay settings-overlay" hidden>
+        <form id="settings-form" class="settings-dialog" novalidate>
+            <header class="settings-header">
+                <div>
+                    <span class="settings-kicker">Semlix preferences</span>
+                    <h2 id="settings-title">Settings</h2>
+                    <p>Choose where Semlix reads mail and how local semantic search runs.</p>
+                </div>
+                <button id="settings-close-button" class="icon-button" type="button" aria-label="Close settings">
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg>
+                </button>
+            </header>
+
+            <div id="settings-setup-notice" class="settings-notice" hidden>
+                <strong>Choose an email archive to begin</strong>
+                <span>Semlix only reads <code>.eml</code> files inside the folder you select.</span>
+            </div>
+
+            <div class="settings-content">
+                <section class="settings-section" aria-labelledby="archive-heading">
+                    <div class="settings-section-heading">
+                        <span class="section-number">01</span>
+                        <div>
+                            <h3 id="archive-heading">Email archive</h3>
+                            <p>The folder is scanned recursively. Source files are never modified.</p>
+                        </div>
+                    </div>
+                    <div class="settings-field">
+                        <label for="settings-path">Archive folder</label>
+                        <div class="path-control">
+                            <input id="settings-path" type="text" readonly required>
+                            <button id="settings-browse-button" class="secondary-button" type="button">Choose folder</button>
+                        </div>
+                    </div>
+                    <div class="settings-field settings-field--compact">
+                        <label for="settings-timezone">Time zone</label>
+                        <input id="settings-timezone" type="text" list="timezone-options" autocomplete="off" required>
+                        <datalist id="timezone-options"></datalist>
+                        <small>Email dates are displayed in this time zone.</small>
+                    </div>
+
+                    <div class="archive-maintenance" aria-labelledby="archive-maintenance-heading">
+                        <div class="archive-maintenance-heading">
+                            <div>
+                                <h4 id="archive-maintenance-heading">Local index</h4>
+                                <p>Build or reset the private search index stored on this device.</p>
+                            </div>
+                            <button id="index-button" class="index-action-button" type="button">
+                                <svg class="button-icon" viewBox="0 0 20 20" aria-hidden="true">
+                                    <path d="M2.75 5.5h5l1.5 1.75h8v8.25a1.75 1.75 0 0 1-1.75 1.75h-11a1.75 1.75 0 0 1-1.75-1.75v-10Z"/>
+                                    <path d="M2.75 7.25V4.5c0-.97.78-1.75 1.75-1.75h2.56L8.5 4.5h7c.97 0 1.75.78 1.75 1.75v1"/>
+                                </svg>
+                                <span>Index emails</span>
+                            </button>
+                        </div>
+                        <div class="archive-maintenance-actions">
+                            <button id="clear-vec-button" class="maintenance-action maintenance-action-danger" type="button">
+                                <span class="maintenance-action-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 20 20">
+                                        <path d="M4 6h12M7.25 6V3.75h5.5V6M6 6l.75 10.25h6.5L14 6"/>
+                                    </svg>
+                                </span>
+                                <span class="maintenance-action-copy">
+                                    <strong>Clear semantic data</strong>
+                                    <small>Keep data for keyword search</small>
+                                </span>
+                            </button>
+                            <button id="clear-sql-button" class="maintenance-action maintenance-action-danger" type="button">
+                                <span class="maintenance-action-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 20 20">
+                                        <path d="M4 6h12M7.25 6V3.75h5.5V6M6 6l.75 10.25h6.5L14 6"/>
+                                    </svg>
+                                </span>
+                                <span class="maintenance-action-copy">
+                                    <strong>Clear all indexed mail</strong>
+                                    <small>Remove all local search data</small>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-section" aria-labelledby="semantic-heading">
+                    <div class="settings-section-heading">
+                        <span class="section-number">02</span>
+                        <div>
+                            <h3 id="semantic-heading">Semantic search</h3>
+                            <p>Tune local inference for your hardware and preferred result depth.</p>
+                        </div>
+                    </div>
+
+                    <div class="model-runtime-card">
+                        <div class="model-runtime-heading">
+                            <span class="model-role">Embedding</span>
+                            <div>
+                                <strong>Build the semantic index</strong>
+                                <small id="embedding-model-detail">Choose the model used for indexing and search queries.</small>
+                            </div>
+                        </div>
+
+                        <div class="settings-field model-selector-field">
+                            <label for="settings-embedding-model">Embedding model</label>
+                            <select id="settings-embedding-model" required></select>
+                            <small>Changing this model requires indexing semantic data again.</small>
+                        </div>
+
+                        <div id="settings-embedding-change-notice" class="embedding-change-notice" hidden>
+                            <strong>Semantic reindex required</strong>
+                            <span>Saving this change will delete semantic chunks and vectors. Keyword-search data will remain available.</span>
+                        </div>
+
+                        <div class="settings-grid settings-grid--two">
+                            <fieldset class="settings-field">
+                                <legend>Embedding device</legend>
+                                <div class="segmented-control">
+                                    <label>
+                                        <input name="settings-embedding-device" type="radio" value="cpu">
+                                        <span>CPU</span>
+                                    </label>
+                                    <label>
+                                        <input name="settings-embedding-device" type="radio" value="webgpu">
+                                        <span>GPU</span>
+                                    </label>
+                                </div>
+                                <small>GPU uses WebGPU when supported.</small>
+                            </fieldset>
+
+                            <div class="settings-field">
+                                <label for="settings-embedding-quantization">Embedding quantization</label>
+                                <select id="settings-embedding-quantization" required disabled>
+                                    <option>Checking model variants...</option>
+                                </select>
+                                <small id="embedding-quantization-status">Checking formats for the embedding model.</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <label class="reranking-card" for="settings-reranking-enabled">
+                        <span>
+                            <strong>Enhanced reranking</strong>
+                            <small>More precise, but slower on weak device</small>
+                        </span>
+                        <span class="switch-control switch-control--large">
+                            <input id="settings-reranking-enabled" type="checkbox">
+                            <span class="switch-track" aria-hidden="true"></span>
+                        </span>
+                    </label>
+
+                    <div class="model-runtime-card model-runtime-card--reranker">
+                        <div class="model-runtime-heading model-runtime-heading--fixed">
+                            <span class="model-role">Reranker</span>
+                            <div>
+                                <strong>Qwen3 Reranker 0.6B</strong>
+                                <small>Reviews the leading results at search time. No reindex is required when these options change.</small>
+                            </div>
+                            <span class="fixed-model-badge">Fixed model</span>
+                        </div>
+
+                        <div class="settings-grid settings-grid--two">
+                            <fieldset class="settings-field">
+                                <legend>Reranking device</legend>
+                                <div class="segmented-control">
+                                    <label>
+                                        <input name="settings-reranking-device" type="radio" value="cpu">
+                                        <span>CPU</span>
+                                    </label>
+                                    <label>
+                                        <input name="settings-reranking-device" type="radio" value="webgpu">
+                                        <span>GPU</span>
+                                    </label>
+                                </div>
+                                <small>Used only when enhanced reranking is enabled.</small>
+                            </fieldset>
+
+                            <div class="settings-field">
+                                <label for="settings-reranking-quantization">Reranking quantization</label>
+                                <select id="settings-reranking-quantization" required disabled>
+                                    <option>Checking model variants...</option>
+                                </select>
+                                <small id="reranking-quantization-status">Checking formats for the reranker.</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ranking-heading">
+                        <strong>Result depth</strong>
+                        <small>Control how many candidates move through each semantic search stage.</small>
+                    </div>
+
+                    <div class="ranking-grid">
+                        <div class="settings-field">
+                            <label for="settings-top-k">Candidates</label>
+                            <input id="settings-top-k" type="number" min="1" max="500" step="1" required>
+                            <small>topK</small>
+                        </div>
+                        <div class="ranking-connector" aria-hidden="true"></div>
+                        <div class="settings-field">
+                            <label for="settings-rerank-top-k">Rerank</label>
+                            <input id="settings-rerank-top-k" type="number" min="1" max="500" step="1" required>
+                            <small>rerankTopK</small>
+                        </div>
+                        <div class="ranking-connector" aria-hidden="true"></div>
+                        <div class="settings-field">
+                            <label for="settings-final-top-k">Return</label>
+                            <input id="settings-final-top-k" type="number" min="1" max="500" step="1" required>
+                            <small>finalTopK</small>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div id="settings-error" class="settings-error" role="alert" hidden></div>
+            <footer class="settings-footer">
+                <p>Embedding model or embedding quantization changes require semantic indexing again.</p>
+                <div>
+                    <button id="settings-cancel-button" class="secondary-button" type="button">Cancel</button>
+                    <button id="settings-save-button" class="primary-button" type="submit">Save settings</button>
+                </div>
+            </footer>
+        </form>
+    </div>
+
+    <script type="module" src="./renderer.js" defer></script>
+</body>
+</html>

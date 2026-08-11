@@ -1,0 +1,87 @@
+name: Build Linux
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Source branch, tag, or commit to build
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Source branch, tag, or commit to build
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+            unpack_dir: linux-unpacked
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            unpack_dir: linux-arm64-unpacked
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build unpacked application
+        run: npm run package:linux:dir -- --${{ matrix.arch }}
+
+      - name: Verify packaged runtime
+        run: node scripts/run-packaged-verification.cjs release/${{ matrix.unpack_dir }}
+
+      - name: Build AppImage
+        run: npm run package:linux -- --${{ matrix.arch }}
+
+      - name: Stage package and calculate SHA-256 hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_directory="$GITHUB_WORKSPACE/release"
+          artifact_directory="$GITHUB_WORKSPACE/dist/artifacts"
+          shopt -s nullglob
+          appimage_files=("$release_directory"/Semlix-*-linux-*.AppImage)
+
+          if [[ ${#appimage_files[@]} -ne 1 ]]; then
+            echo "Expected exactly one Linux AppImage, found ${#appimage_files[@]}." >&2
+            exit 1
+          fi
+
+          mkdir -p "$artifact_directory"
+          cp "${appimage_files[0]}" "$artifact_directory/"
+          cd "$artifact_directory"
+          sha256sum "$(basename "${appimage_files[0]}")" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload Linux package
+        uses: actions/upload-artifact@v7
+        with:
+          name: Semlix-linux-${{ matrix.arch }}
+          path: dist/artifacts/*
+          if-no-files-found: error
+          retention-days: 7

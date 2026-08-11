@@ -1,0 +1,54 @@
+<svg
+  width="512"
+  height="512"
+  viewBox="0 0 512 512"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+>
+
+  <rect
+    x="24"
+    y="24"
+    width="464"
+    height="464"
+    rx="112"
+    fill="#111827"
+  />
+
+  <!-- Envelope -->
+  <path
+    d="M104 148
+       L256 274
+       L408 148"
+    stroke="#FFFFFF"
+    stroke-width="40"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <path
+    d="M104 148
+       V348
+       C104 388 136 416 176 416
+       H336
+       C376 416 408 388 408 348
+       V148"
+    stroke="#FFFFFF"
+    stroke-width="40"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Semantic/index node -->
+  <path
+    d="M256 234
+       L298 276
+       L256 318
+       L214 276
+       Z"
+    fill="#111827"
+    stroke="#FFFFFF"
+    stroke-width="22"
+    stroke-linejoin="round"
+  />
+</svg>

@@ -1,0 +1,89 @@
+name: Build macOS
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Source branch, tag, or commit to build
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Source branch, tag, or commit to build
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: macos-15-intel
+            unpack_dir: mac
+          - arch: arm64
+            runner: macos-15
+            unpack_dir: mac-arm64
+    runs-on: ${{ matrix.runner }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build unpacked application
+        run: npm run package:mac:dir -- --${{ matrix.arch }}
+
+      - name: Verify packaged runtime
+        run: node scripts/run-packaged-verification.cjs release/${{ matrix.unpack_dir }}/Semlix.app
+
+      - name: Build disk image
+        run: npm run package:mac -- --${{ matrix.arch }}
+
+      - name: Stage package and calculate SHA-256 hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_directory="$GITHUB_WORKSPACE/release"
+          artifact_directory="$GITHUB_WORKSPACE/dist/artifacts"
+          shopt -s nullglob
+          dmg_files=("$release_directory"/Semlix-*-mac-${{ matrix.arch }}.dmg)
+
+          if [[ ${#dmg_files[@]} -ne 1 ]]; then
+            echo "Expected exactly one macOS disk image, found ${#dmg_files[@]}." >&2
+            exit 1
+          fi
+
+          mkdir -p "$artifact_directory"
+          cp "${dmg_files[0]}" "$artifact_directory/"
+          cd "$artifact_directory"
+          shasum -a 256 "$(basename "${dmg_files[0]}")" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v7
+        with:
+          name: Semlix-macos-${{ matrix.arch }}
+          path: dist/artifacts/*
+          if-no-files-found: error
+          retention-days: 7

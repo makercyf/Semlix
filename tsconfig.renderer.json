@@ -1,0 +1,11 @@
+
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",              
+    "outDir": "dist",
+    "rootDir": "./src/renderer",
+    "isolatedModules": true         
+  },
+  "include": ["src/renderer/**/*"]
+}
