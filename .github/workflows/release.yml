@@ -119,4 +119,4 @@ jobs:
           name: Semlix-${{ needs.prepare-release.outputs.version }}-release
           path: release-assets/*
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
