@@ -28,6 +28,12 @@ embeddings, and optional reranking all run on your computer.
 
 Semlix does not connect to Gmail, Outlook, IMAP, or any other online mailbox.
 
+## Screenshots
+
+<p align="center">
+  <img src="/imgs/main_screen.png" alt="Semlix main screen" width="70%">
+</p>
+
 ## Download
 
 See the [releases](https://github.com/makercyf/Semlix/releases) page.
